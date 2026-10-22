@@ -1,0 +1,17 @@
+[
+  {
+    "id": "key-demo-1",
+    "name": "Akun 1 (Contoh Akun Utama)",
+    "apiKey": "",
+    "active": true,
+    "status": "ACTIVE",
+    "quotaLimit": 1000000,
+    "tokensUsed": 0,
+    "requestCount": 0,
+    "successCount": 0,
+    "failCount": 0,
+    "coolingUntil": 0,
+    "lastUsed": null,
+    "lastError": null
+  }
+]

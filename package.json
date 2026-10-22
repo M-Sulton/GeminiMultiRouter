@@ -1,0 +1,16 @@
+{
+  "name": "gemini-multi-router",
+  "version": "1.0.0",
+  "description": "Multi-Account Gemini 3.8 Flash Proxy & Key Pool with Auto-Failover, Quota Tracker, and Chatbot UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "author": "M-Sulton",
+  "license": "MIT"
+}

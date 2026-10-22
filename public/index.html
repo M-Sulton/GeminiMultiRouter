@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini 3.8 Flash Multi-Account Pool & Router</title>
+  <meta name="description" content="Multi-Account Gemini 3.8 Flash Key Pool & Smart Router dengan fitur Auto-Switch, Quota Tracker, dan OpenAI Compatible API untuk 9router.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="gemini-theme">
+  <div class="cosmic-bg"></div>
+  <div class="ambient-glow glow-cyan"></div>
+  <div class="ambient-glow glow-violet"></div>
+
+  <!-- Header -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-icon-wrap">
+        <i class="fa-solid fa-wand-magic-sparkles brand-sparkle"></i>
+      </div>
+      <div>
+        <div class="brand-title">GEMINI 3.8 FLASH</div>
+        <div class="brand-subtitle">MULTI-ACCOUNT ROUTER & KEY POOL</div>
+      </div>
+    </div>
+
+    <!-- Live Status Quick Pill -->
+    <div class="live-status-bar">
+      <div class="status-chip" id="chip-accounts" title="Jumlah akun aktif di pool">
+        <span class="live-dot pulse"></span>
+        <span id="chip-accounts-text">Memuat akun...</span>
+      </div>
+      <div class="status-chip" id="chip-strategy" title="Strategi rotasi akun saat ini">
+        <i class="fa-solid fa-arrows-split-up-and-left text-cyan"></i>
+        <span id="chip-strategy-text">Failover Mode</span>
+      </div>
+      <div class="status-chip" id="chip-tokens" title="Total token yang telah diproses">
+        <i class="fa-solid fa-chart-simple text-amber"></i>
+        <span id="chip-tokens-text">0 Tokens</span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button type="button" class="tab-btn active" data-tab="tab-chat" id="btn-tab-chat">
+        <i class="fa-regular fa-comments"></i>
+        <span>CHATBOT UI</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="tab-keys" id="btn-tab-keys">
+        <i class="fa-solid fa-key"></i>
+        <span>MANAJEMEN AKUN</span>
+        <span class="badge-count" id="nav-key-count">0</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="tab-analytics" id="btn-tab-analytics">
+        <i class="fa-solid fa-chart-line"></i>
+        <span>LOGS & KUOTA</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="tab-9router" id="btn-tab-9router">
+        <i class="fa-solid fa-network-wired"></i>
+        <span>KONEKSI 9ROUTER</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main-content">
+
+    <!-- ==================== TAB 1: CHATBOT UI ==================== -->
+    <section class="tab-pane active" id="tab-chat">
+      <div class="chat-layout">
+        <!-- Chat Side Panel: Settings & Current Account in Use -->
+        <aside class="chat-sidebar">
+          <div class="sidebar-card">
+            <h3 class="panel-heading"><i class="fa-solid fa-sliders text-cyan"></i> MODEL & PARAMETER</h3>
+            
+            <div class="form-group">
+              <label for="chat-model-select">PILIHAN MODEL</label>
+              <div class="select-wrapper">
+                <select id="chat-model-select" class="custom-select">
+                  <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (Paling Cepat & Cerdas)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Analytical)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="chat-temp-slider">
+                TEMPERATURE: <span id="temp-display" class="text-cyan">0.7</span>
+              </label>
+              <input type="range" id="chat-temp-slider" min="0" max="1.5" step="0.1" value="0.7" class="custom-slider">
+              <div class="slider-labels">
+                <span>Presisi</span>
+                <span>Kreatif</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="chat-system-prompt">SYSTEM INSTRUCTION</label>
+              <textarea id="chat-system-prompt" class="custom-textarea" rows="3" placeholder="Instruksi perilaku untuk Gemini..."></textarea>
+            </div>
+          </div>
+
+          <!-- Active Key Pool Snapshot -->
+          <div class="sidebar-card">
+            <h3 class="panel-heading"><i class="fa-solid fa-bolt-lightning text-amber"></i> AKUN AKTIF SAAT INI</h3>
+            <div id="active-key-snapshot" class="active-key-box">
+              <div class="ak-header">
+                <span class="live-dot pulse"></span>
+                <strong id="active-key-name">Menunggu pesan...</strong>
+              </div>
+              <div class="ak-meta">
+                <span id="active-key-status" class="badge-status-pill badge-active">STANDBY</span>
+                <span id="active-key-tokens">0 Tokens</span>
+              </div>
+              <p class="ak-desc">
+                Jika akun ini mencapai limit (429 / kuota habis), sistem akan <b>otomatis beralih ke akun berikutnya tanpa membatalkan pertanyaan Anda</b>.
+              </p>
+            </div>
+
+            <button type="button" class="btn-secondary-tactical btn-block" id="btn-clear-chat">
+              <i class="fa-solid fa-trash-can"></i> Bersihkan Riwayat Chat
+            </button>
+          </div>
+        </aside>
+
+        <!-- Chat Stream Window -->
+        <div class="chat-main">
+          <div class="chat-messages-container" id="chat-messages">
+            <!-- Welcome message -->
+            <div class="message-wrapper assistant-msg">
+              <div class="avatar-box ai-avatar">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
+              <div class="message-content-wrap">
+                <div class="message-meta-header">
+                  <span class="sender-name">GEMINI 3.8 FLASH</span>
+                  <span class="badge-meta">MULTI-ACCOUNT ROUTER</span>
+                </div>
+                <div class="message-bubble">
+                  <p>Halo! Saya adalah <b>Gemini 3.8 Flash</b> yang terhubung langsung melalui <b>Pool Router Akun Google Anda</b>.</p>
+                  <p>Keunggulan sistem ini:</p>
+                  <ul>
+                    <li>⚡ <b>Multi-Account Key Pool</b>: Menghubungkan banyak akun Google/Gmail secara bersamaan.</li>
+                    <li>🔄 <b>Auto-Switch / Failover</b>: Jika satu akun kehabisan kuota atau rate-limited, router akan langsung beralih ke akun berikutnya secara otomatis tanpa jeda.</li>
+                    <li>🔌 <b>OpenAI Compatible Endpoint</b>: Dapat digunakan sebagai upstream model untuk <b>9router</b>, Cursor, Claude Code, dan tools lainnya di VPS Anda.</li>
+                  </ul>
+                  <p>Silakan tanyakan apa saja atau mulai masukkan API Key akun Anda di tab <b>Manajemen Akun</b>!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input Bar -->
+          <div class="chat-input-wrapper">
+            <div class="input-glow-frame">
+              <textarea id="chat-user-input" class="chat-textarea" placeholder="Ketik pertanyaan untuk Gemini 3.8 Flash... (Tekan Enter untuk kirim, Shift+Enter untuk baris baru)" rows="1"></textarea>
+              <button type="button" class="btn-send-chat" id="btn-send-chat" title="Kirim Pesan">
+                <i class="fa-solid fa-arrow-up" id="btn-send-icon"></i>
+              </button>
+            </div>
+            <div class="input-subnote">
+              <span><i class="fa-solid fa-shield-halved text-cyan"></i> Auto-Failover Aktif</span>
+              <span>•</span>
+              <span id="chat-model-indicator">Model: gemini-3.8-flash</span>
+              <span>•</span>
+              <span>Tekan <kbd>Enter</kbd> untuk mengirim</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: MANAJEMEN AKUN & KEY POOL ==================== -->
+    <section class="tab-pane" id="tab-keys">
+      <div class="pane-header-row">
+        <div>
+          <h2 class="pane-title"><i class="fa-solid fa-key text-cyan"></i> DAFTAR AKUN GOOGLE & GEMINI API KEY</h2>
+          <p class="pane-subtitle">Kelola seluruh akun Gmail / Google AI Studio Anda. Router akan merotasi dan mengalihkan request secara otomatis antar akun ini.</p>
+        </div>
+        <div class="pane-action-group">
+          <button type="button" class="btn-primary-tactical" id="btn-modal-add-key">
+            <i class="fa-solid fa-plus"></i> TAMBAH AKUN / API KEY
+          </button>
+        </div>
+      </div>
+
+      <!-- Strategy & Global Settings Bar -->
+      <div class="strategy-banner-card">
+        <div class="strategy-info">
+          <div class="icon-circle">
+            <i class="fa-solid fa-arrows-spin text-cyan"></i>
+          </div>
+          <div>
+            <strong>METODE ROTASI & FAILOVER</strong>
+            <p>Pilih bagaimana router mendistribusikan request antar akun yang Anda masukkan:</p>
+          </div>
+        </div>
+        <div class="strategy-controls">
+          <div class="select-wrapper">
+            <select id="select-rotation-strategy" class="custom-select">
+              <option value="failover">Sequential Failover (Akun 1 Utama, Pindah ke Akun 2 Jika Habis)</option>
+              <option value="round-robin">Round Robin (Bagi Rata Bergantian di Setiap Request)</option>
+              <option value="least-used">Least Used (Pilih Akun dengan Token Terendah)</option>
+            </select>
+          </div>
+          <button type="button" class="btn-secondary-tactical" id="btn-save-strategy">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan
+          </button>
+        </div>
+      </div>
+
+      <!-- Key Cards Grid -->
+      <div class="keys-grid" id="keys-card-container">
+        <!-- Rendered dynamically via app.js -->
+        <div class="empty-keys-placeholder">
+          <i class="fa-solid fa-key-skeleton text-muted"></i>
+          <h3>Belum ada API Key Gemini ditambahkan</h3>
+          <p>Klik tombol <b>Tambah Akun / API Key</b> di atas untuk menambahkan akun Google Anda.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: LOGS & ANALYTICS ==================== -->
+    <section class="tab-pane" id="tab-analytics">
+      <div class="pane-header-row">
+        <div>
+          <h2 class="pane-title"><i class="fa-solid fa-chart-line text-cyan"></i> ANALITIK PENGGUNAAN & RIWAYAT FAILOVER</h2>
+          <p class="pane-subtitle">Pantau konsumsi token, performa masing-masing akun, dan riwayat perpindahan otomatis saat kuota habis.</p>
+        </div>
+        <button type="button" class="btn-secondary-tactical" id="btn-refresh-stats">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh Data
+        </button>
+      </div>
+
+      <!-- 4 KPI Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card cyan-glow">
+          <div class="kpi-label"><i class="fa-solid fa-coins text-cyan"></i> TOTAL TOKEN DIPAKAI</div>
+          <div class="kpi-value text-cyan" id="kpi-total-tokens">0</div>
+          <div class="kpi-sub">Akumulasi seluruh akun</div>
+        </div>
+        <div class="kpi-card green-glow">
+          <div class="kpi-label"><i class="fa-solid fa-circle-check text-green"></i> TINGKAT KEBERHASILAN</div>
+          <div class="kpi-value text-green" id="kpi-success-rate">100%</div>
+          <div class="kpi-sub" id="kpi-success-detail">0 dari 0 request</div>
+        </div>
+        <div class="kpi-card violet-glow">
+          <div class="kpi-label"><i class="fa-solid fa-users text-violet"></i> TOTAL AKUN TERSEDIA</div>
+          <div class="kpi-value text-violet" id="kpi-active-keys">0 / 0</div>
+          <div class="kpi-sub" id="kpi-active-sub">Semua akun siap tempur</div>
+        </div>
+        <div class="kpi-card amber-glow">
+          <div class="kpi-label"><i class="fa-solid fa-battery-half text-amber"></i> ESTIMASI SISA KUOTA</div>
+          <div class="kpi-value gold-text" id="kpi-remaining-quota">1,000,000</div>
+          <div class="kpi-sub">Berdasarkan limit pool</div>
+        </div>
+      </div>
+
+      <!-- Real-Time Activity Log Feed -->
+      <div class="logs-card">
+        <div class="logs-header">
+          <div class="logs-title-group">
+            <i class="fa-solid fa-timeline text-cyan"></i>
+            <strong>RIWAYAT PERISTIWA FAILOVER & AUTO-SWITCH</strong>
+          </div>
+          <span class="live-tag"><i class="fa-solid fa-wifi fa-fade"></i> Real-time</span>
+        </div>
+        <div class="logs-table-wrap">
+          <table class="logs-table">
+            <thead>
+              <tr>
+                <th>WAKTU</th>
+                <th>TIPE EVENT</th>
+                <th>KETERANGAN PERISTIWA</th>
+              </tr>
+            </thead>
+            <tbody id="logs-tbody">
+              <tr>
+                <td colspan="3" class="text-center text-muted" style="padding: 2rem;">Belum ada riwayat failover</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: 9ROUTER INTEGRATION ==================== -->
+    <section class="tab-pane" id="tab-9router">
+      <div class="pane-header-row">
+        <div>
+          <h2 class="pane-title"><i class="fa-solid fa-network-wired text-cyan"></i> CARA MENGHUBUNGKAN KE 9ROUTER & TOOLS LAIN</h2>
+          <p class="pane-subtitle">Gunakan proxy multi-akun Gemini ini sebagai penyedia model cerdas di 9router, Cursor, Claude Code, atau script otomatisasi Anda.</p>
+        </div>
+      </div>
+
+      <div class="guide-grid">
+        <!-- Card 1: 9router configuration -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="step-num">01</span>
+            <div>
+              <h3>Integrasi ke 9router di VPS</h3>
+              <span class="guide-sub">Gunakan custom provider OpenAI di 9router</span>
+            </div>
+          </div>
+          <p>9router mendukung endpoint upstream berformat OpenAI. Arahkan base URL 9router ke proxy Gemini ini:</p>
+          <div class="code-box">
+            <div class="code-box-header">
+              <span>Endpoint Base URL</span>
+              <button class="btn-copy" onclick="copyText('http://localhost:3003/v1')"><i class="fa-regular fa-copy"></i> Salin</button>
+            </div>
+            <code>http://localhost:3003/v1</code>
+          </div>
+          <div class="code-box" style="margin-top: 10px;">
+            <div class="code-box-header">
+              <span>Nama Model untuk 9router</span>
+              <button class="btn-copy" onclick="copyText('gemini-3.8-flash')"><i class="fa-regular fa-copy"></i> Salin</button>
+            </div>
+            <code>gemini-3.8-flash</code>
+          </div>
+          <p class="guide-note">
+            <i class="fa-solid fa-circle-info text-cyan"></i> API Key di 9router dapat diisi sembarang string (misal: <code>gemini-pool-token</code>) karena validasi dan rotasi key dilakukan otomatis oleh router ini.
+          </p>
+        </div>
+
+        <!-- Card 2: cURL / HTTP Test -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="step-num">02</span>
+            <div>
+              <h3>Test Request via cURL</h3>
+              <span class="guide-sub">Standar OpenAI chat completion</span>
+            </div>
+          </div>
+          <p>Jalankan perintah ini di terminal untuk menguji multi-account failover langsung:</p>
+          <div class="code-box">
+            <div class="code-box-header">
+              <span>Bash / Terminal</span>
+              <button class="btn-copy" onclick="copyText(curlSnippet)"><i class="fa-regular fa-copy"></i> Salin</button>
+            </div>
+            <pre><code id="curl-code-snippet">curl -X POST http://localhost:3003/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-3.8-flash",
+    "messages": [
+      {"role": "user", "content": "Jelaskan keunggulan Gemini 3.8 Flash dalam 2 kalimat."}
+    ]
+  }'</code></pre>
+          </div>
+        </div>
+
+        <!-- Card 3: Python OpenAI SDK -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="step-num">03</span>
+            <div>
+              <h3>Python (OpenAI SDK)</h3>
+              <span class="guide-sub">Integrasikan ke agent / bot Python</span>
+            </div>
+          </div>
+          <div class="code-box">
+            <div class="code-box-header">
+              <span>Python</span>
+              <button class="btn-copy" onclick="copyText(pythonSnippet)"><i class="fa-regular fa-copy"></i> Salin</button>
+            </div>
+            <pre><code>from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:3003/v1",
+    api_key="gemini-pool-active"
+)
+
+response = client.chat.completions.create(
+    model="gemini-3.8-flash",
+    messages=[{"role": "user", "content": "Halo Gemini!"}]
+)
+print(response.choices[0].message.content)</code></pre>
+          </div>
+        </div>
+
+        <!-- Card 4: Node.js OpenAI SDK -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="step-num">04</span>
+            <div>
+              <h3>Node.js / JavaScript</h3>
+              <span class="guide-sub">Untuk bot Discord, Telegram, dan web service</span>
+            </div>
+          </div>
+          <div class="code-box">
+            <div class="code-box-header">
+              <span>JavaScript</span>
+              <button class="btn-copy" onclick="copyText(jsSnippet)"><i class="fa-regular fa-copy"></i> Salin</button>
+            </div>
+            <pre><code>import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  baseURL: 'http://localhost:3003/v1',
+  apiKey: 'gemini-pool-token'
+});
+
+const res = await openai.chat.completions.create({
+  model: 'gemini-3.8-flash',
+  messages: [{ role: 'user', content: 'Halo dari Node.js!' }]
+});
+console.log(res.choices[0].message.content);</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODAL: TAMBAH / EDIT AKUN ==================== -->
+  <div class="modal-backdrop" id="modal-key-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i class="fa-solid fa-key text-cyan"></i>
+          <h3 id="modal-key-title">Tambah Akun Gemini Baru</h3>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-modal">&times;</button>
+      </div>
+
+      <form id="form-key">
+        <input type="hidden" id="key-edit-id" value="">
+
+        <div class="form-group">
+          <label for="key-input-name">NAMA / LABEL AKUN (GMAIL)</label>
+          <input type="text" id="key-input-name" class="custom-input" placeholder="Contoh: Akun Utama (sulton.dev@gmail.com)" required>
+          <small class="field-hint">Beri label unik agar mudah melacak akun mana yang aktif atau habis kuotanya.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="key-input-apikey">GOOGLE GEMINI API KEY</label>
+          <div class="password-input-wrap">
+            <input type="password" id="key-input-apikey" class="custom-input" placeholder="AIzaSy..." required>
+            <button type="button" class="btn-toggle-visibility" id="btn-toggle-pw" title="Lihat Key">
+              <i class="fa-regular fa-eye" id="pw-eye-icon"></i>
+            </button>
+          </div>
+          <small class="field-hint">Dapatkan gratis di Google AI Studio (aistudio.google.com).</small>
+        </div>
+
+        <div class="form-group">
+          <label for="key-input-quota">BATAS ESTIMASI TOKEN KUOTA</label>
+          <input type="number" id="key-input-quota" class="custom-input" value="1000000" step="100000">
+          <small class="field-hint">Default: 1.000.000 token per akun (dapat disesuaikan sesuai paket paket Anda).</small>
+        </div>
+
+        <div class="modal-test-area" id="modal-test-result" style="display: none;"></div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-tactical" id="btn-test-modal-key">
+            <i class="fa-solid fa-vial"></i> Test Ping Akun Ini
+          </button>
+          <button type="submit" class="btn-primary-tactical" id="btn-save-key-submit">
+            <i class="fa-solid fa-check"></i> Simpan ke Pool
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast-notification"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
