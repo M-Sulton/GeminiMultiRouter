@@ -10,5 +10,10 @@
   "rotationStrategy": "failover",
   "cooldownSeconds": 60,
   "maxRetries": 3,
-  "systemPromptDefault": "You are Gemini 3.8 Flash, an advanced, highly intelligent AI assistant routed through the Hermes Multi-Account Gateway. Be concise, precise, and helpful."
+  "systemPromptDefault": "You are Gemini 3.8 Flash, an advanced, highly intelligent AI assistant routed through the Hermes Multi-Account Gateway. Be concise, precise, and helpful.",
+  "oauth": {
+    "googleClientId": "",
+    "googleClientSecret": "",
+    "redirectUri": "https://tonhermes.web.id/9routerui/api/oauth/google/callback"
+  }
 }

@@ -374,6 +374,7 @@ function renderKeyCards(keys) {
     const pct = Math.min(100, Math.round(((k.tokensUsed || 0) / (k.quotaLimit || 1000000)) * 100));
     const isExhausted = k.status === 'EXHAUSTED';
     const isCooling = k.status === 'COOLING_DOWN';
+    const isOAuth = k.authType === 'oauth';
     
     let statusClass = 'badge-active';
     let statusText = 'ACTIVE';
@@ -390,12 +391,22 @@ function renderKeyCards(keys) {
       statusText = 'NONAKTIF';
     }
 
+    const avatarHtml = k.picture 
+      ? `<img src="${k.picture}" class="oauth-avatar" alt="Avatar">`
+      : (isOAuth ? `<i class="fa-brands fa-google text-cyan" style="font-size: 1.25rem;"></i>` : '');
+
     return `
       <div class="key-card">
         <div class="key-card-header">
-          <div class="key-title-group">
-            <h4>${escapeHtml(k.name)}</h4>
-            <span class="key-masked-code">${k.maskedKey || 'Belum ada key'}</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            ${avatarHtml}
+            <div class="key-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h4>${escapeHtml(k.name)}</h4>
+                ${isOAuth ? '<span class="badge-oauth-pill"><i class="fa-brands fa-google"></i> OAuth</span>' : ''}
+              </div>
+              <span class="key-masked-code">${k.maskedKey || 'Belum ada key'}</span>
+            </div>
           </div>
           <span class="badge-status-pill ${statusClass}">${statusText}</span>
         </div>
@@ -427,7 +438,7 @@ function renderKeyCards(keys) {
 
         <div class="key-actions-row">
           <div style="display: flex; gap: 8px;">
-            <button type="button" class="btn-card-action" onclick="testKeyAction('${k.id}')" title="Test validitas API Key">
+            <button type="button" class="btn-card-action" onclick="testKeyAction('${k.id}')" title="Test validitas API / Token">
               <i class="fa-solid fa-vial"></i> Test
             </button>
             <button type="button" class="btn-card-action" onclick="toggleKeyAction('${k.id}')" title="Nyalakan / Matikan">
@@ -542,6 +553,131 @@ function initKeyModal() {
           modal.style.display = 'none';
           fetchKeys();
           fetchStats();
+        } else {
+          showToast(`Gagal: ${data.message}`);
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`);
+      }
+    });
+  }
+
+  // ==================== GOOGLE OAUTH 2.0 INTEGRATION ====================
+  const btnGoogleOAuth = document.getElementById('btn-oauth-google-login');
+  const btnOpenOAuthConfig = document.getElementById('btn-open-oauth-config');
+  const btnOpenOAuthTop = document.getElementById('btn-open-oauth-settings-top');
+  const modalOAuthConfig = document.getElementById('modal-oauth-config-backdrop');
+  const btnCloseOAuthConfig = document.getElementById('btn-close-oauth-modal');
+  const btnCancelOAuthConfig = document.getElementById('btn-cancel-oauth-modal');
+  const formOAuthConfig = document.getElementById('form-oauth-config');
+  const btnCopyRedirectUri = document.getElementById('btn-copy-redirect-uri');
+
+  async function checkOAuthStatus() {
+    try {
+      const res = await fetch(`${BASE_PATH}/api/oauth/google/status`);
+      const data = await res.json();
+      if (data.success) {
+        const notice = document.getElementById('oauth-setup-notice');
+        if (notice) {
+          notice.style.display = data.configured ? 'none' : 'flex';
+        }
+        const redirectEl = document.getElementById('display-redirect-uri');
+        if (redirectEl && data.redirectUri) {
+          redirectEl.textContent = data.redirectUri;
+        }
+      }
+      return data;
+    } catch (e) {
+      console.warn('OAuth status check failed:', e);
+      return { configured: false };
+    }
+  }
+
+  // Check OAuth status on initialize
+  checkOAuthStatus();
+
+  // Listen for callback from OAuth popup window
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'OAUTH_SUCCESS') {
+      showToast(`✅ Akun Google (${event.data.email}) berhasil terhubung ke Pool!`);
+      if (modal) modal.style.display = 'none';
+      if (modalOAuthConfig) modalOAuthConfig.style.display = 'none';
+      fetchKeys();
+      fetchStats();
+    }
+  });
+
+  if (btnGoogleOAuth) {
+    btnGoogleOAuth.addEventListener('click', async () => {
+      const status = await checkOAuthStatus();
+      if (!status.configured) {
+        showToast('ℹ️ Konfigurasikan Google OAuth Client ID & Secret sekali saja terlebih dahulu.');
+        if (modal) modal.style.display = 'none';
+        if (modalOAuthConfig) modalOAuthConfig.style.display = 'flex';
+        return;
+      }
+
+      // Open OAuth popup window
+      const w = 550, h = 680;
+      const left = Math.max(0, (window.screen.width / 2) - (w / 2));
+      const top = Math.max(0, (window.screen.height / 2) - (h / 2));
+      const popup = window.open(
+        `${BASE_PATH}/api/oauth/google/login`,
+        'google_oauth_login',
+        `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,status=no`
+      );
+
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.location.href = `${BASE_PATH}/api/oauth/google/login`;
+      }
+    });
+  }
+
+  function openOAuthSetupModal() {
+    checkOAuthStatus();
+    if (modal) modal.style.display = 'none';
+    if (modalOAuthConfig) modalOAuthConfig.style.display = 'flex';
+  }
+
+  if (btnOpenOAuthConfig) btnOpenOAuthConfig.addEventListener('click', openOAuthSetupModal);
+  if (btnOpenOAuthTop) btnOpenOAuthTop.addEventListener('click', openOAuthSetupModal);
+
+  if (btnCloseOAuthConfig) {
+    btnCloseOAuthConfig.addEventListener('click', () => {
+      if (modalOAuthConfig) modalOAuthConfig.style.display = 'none';
+    });
+  }
+  if (btnCancelOAuthConfig) {
+    btnCancelOAuthConfig.addEventListener('click', () => {
+      if (modalOAuthConfig) modalOAuthConfig.style.display = 'none';
+    });
+  }
+
+  if (btnCopyRedirectUri) {
+    btnCopyRedirectUri.addEventListener('click', () => {
+      const uri = document.getElementById('display-redirect-uri').textContent.trim();
+      copyText(uri);
+    });
+  }
+
+  if (formOAuthConfig) {
+    formOAuthConfig.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const clientId = document.getElementById('oauth-client-id').value.trim();
+      const clientSecret = document.getElementById('oauth-client-secret').value.trim();
+
+      try {
+        const res = await fetch(`${BASE_PATH}/api/oauth/google/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, clientSecret })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Pengaturan Google OAuth berhasil disimpan!');
+          if (modalOAuthConfig) modalOAuthConfig.style.display = 'none';
+          checkOAuthStatus();
+          if (modal) modal.style.display = 'flex';
         } else {
           showToast(`Gagal: ${data.message}`);
         }

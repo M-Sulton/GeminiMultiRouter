@@ -65,9 +65,18 @@ class GeminiClient {
   /**
    * Non-streaming call to Gemini API
    */
-  async generateContent({ apiKey, model, messages, temperature = 0.7, maxTokens = 4096 }) {
+  async generateContent({ apiKey, authToken, authType = 'apiKey', model, messages, temperature = 0.7, maxTokens = 4096 }) {
     const targetModel = this.normalizeModelName(model);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    let url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`;
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (authType === 'oauth' || authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    } else {
+      url += `?key=${apiKey}`;
+    }
 
     const { systemInstruction, contents } = this.convertOpenAiMessagesToGemini(messages);
 
@@ -85,9 +94,7 @@ class GeminiClient {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -123,18 +130,19 @@ class GeminiClient {
   /**
    * Quick key validation test with auto-fallback
    */
-  async testKey(apiKey, model = 'gemini-3.8-flash') {
+  async testKey(authData, model = 'gemini-3.8-flash') {
+    const auth = typeof authData === 'string' ? { apiKey: authData, authType: 'apiKey' } : authData;
     let targetModel = this.normalizeModelName(model);
-    let result = await this._ping(apiKey, targetModel);
+    let result = await this._ping(auth, targetModel);
 
     // If targetModel failed because of model availability (404 / deprecated), try gemini-3.8-flash or gemini-2.0-flash
     if (!result.success && (result.status === 404 || (result.error && (result.error.includes('not found') || result.error.includes('no longer available'))))) {
       if (targetModel !== 'gemini-3.8-flash') {
-        const retryFlash = await this._ping(apiKey, 'gemini-3.8-flash');
+        const retryFlash = await this._ping(auth, 'gemini-3.8-flash');
         if (retryFlash.success) return retryFlash;
       }
       if (targetModel !== 'gemini-2.0-flash') {
-        const retry2 = await this._ping(apiKey, 'gemini-2.0-flash');
+        const retry2 = await this._ping(auth, 'gemini-2.0-flash');
         if (retry2.success) return retry2;
       }
     }
@@ -142,8 +150,15 @@ class GeminiClient {
     return result;
   }
 
-  async _ping(apiKey, targetModel) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+  async _ping(auth, targetModel) {
+    let url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`;
+    const headers = { 'Content-Type': 'application/json' };
+
+    if (auth.authType === 'oauth' || auth.authToken) {
+      headers['Authorization'] = `Bearer ${auth.authToken}`;
+    } else {
+      url += `?key=${auth.apiKey}`;
+    }
 
     const payload = {
       contents: [{ role: 'user', parts: [{ text: 'Ping test. Reply with word PONG only.' }] }],
@@ -154,7 +169,7 @@ class GeminiClient {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload)
       });
 

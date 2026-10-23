@@ -49,8 +49,12 @@ class OpenAiAdapter {
       console.log(`[Adapter] [Attempt ${attempt}/${maxRetries}] Menjalankan request menggunakan: ${currentKey.name} (${currentKey.maskedKey})`);
 
       try {
+        const auth = await keyPool.getValidAuthToken(currentKey);
+
         const result = await geminiClient.generateContent({
-          apiKey: currentKey.apiKey,
+          authType: auth.type,
+          authToken: auth.type === 'oauth' ? auth.token : undefined,
+          apiKey: auth.type === 'apiKey' ? auth.token : undefined,
           model,
           messages,
           temperature,

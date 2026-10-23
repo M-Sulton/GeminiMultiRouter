@@ -108,10 +108,12 @@ class KeyPoolManager {
 
     const activeKeys = this.keys.filter(k => 
       k.active !== false && 
-      k.apiKey && 
-      k.apiKey.trim().length > 10 &&
       k.status === 'ACTIVE' &&
-      !excludeKeyIds.includes(k.id)
+      !excludeKeyIds.includes(k.id) &&
+      (
+        (k.authType === 'oauth' && (k.accessToken || k.refreshToken)) ||
+        (k.apiKey && k.apiKey.trim().length > 10)
+      )
     );
 
     if (activeKeys.length === 0) {
@@ -194,21 +196,149 @@ class KeyPoolManager {
   }
 
   /**
+   * Get valid authorization token for an account (auto-refreshing OAuth token if expired)
+   */
+  async getValidAuthToken(key) {
+    if (key.authType !== 'oauth') {
+      return { type: 'apiKey', token: key.apiKey };
+    }
+
+    const now = Date.now();
+    // If access token is valid for at least 2 more minutes, use it
+    if (key.accessToken && key.tokenExpiry && now < (key.tokenExpiry - 120000)) {
+      return { type: 'oauth', token: key.accessToken };
+    }
+
+    // Needs refresh!
+    if (!key.refreshToken) {
+      if (key.accessToken) return { type: 'oauth', token: key.accessToken };
+      throw new Error(`Akun Google OAuth ${key.name} tidak memiliki refresh token. Silakan hubungkan ulang akun.`);
+    }
+
+    const oauth = this.config?.oauth || {};
+    const clientId = oauth.googleClientId;
+    const clientSecret = oauth.googleClientSecret;
+
+    if (!clientId || !clientSecret) {
+      if (key.accessToken) return { type: 'oauth', token: key.accessToken };
+      throw new Error('Google OAuth Client ID & Secret belum dikonfigurasi di Pengaturan.');
+    }
+
+    try {
+      this.logEvent('INFO', `Memperbarui token akses OAuth untuk akun: ${key.name}...`);
+      const resp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: key.refreshToken,
+          grant_type: 'refresh_token'
+        })
+      });
+
+      const tokenData = await resp.json();
+      if (!resp.ok) {
+        throw new Error(tokenData?.error_description || tokenData?.error || `HTTP ${resp.status}`);
+      }
+
+      key.accessToken = tokenData.access_token;
+      key.tokenExpiry = Date.now() + ((tokenData.expires_in || 3600) * 1000);
+      if (tokenData.refresh_token) {
+        key.refreshToken = tokenData.refresh_token;
+      }
+      this.saveKeys();
+      this.logEvent('INFO', `Token OAuth akun ${key.name} berhasil diperbarui otomatis.`);
+      return { type: 'oauth', token: key.accessToken };
+    } catch (err) {
+      this.logEvent('ERROR', `Gagal me-refresh token OAuth akun ${key.name}: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Add or update an OAuth Google account
+   */
+  addOrUpdateOAuthAccount({ email, name, picture, accessToken, refreshToken, expiresIn }) {
+    const existingIndex = this.keys.findIndex(k => 
+      (k.email && k.email.toLowerCase() === email.toLowerCase()) || 
+      (k.name && k.name.toLowerCase() === email.toLowerCase())
+    );
+
+    const tokenExpiry = Date.now() + ((expiresIn || 3600) * 1000);
+
+    if (existingIndex !== -1) {
+      const existing = this.keys[existingIndex];
+      existing.authType = 'oauth';
+      existing.name = name || email;
+      existing.email = email;
+      if (picture) existing.picture = picture;
+      existing.accessToken = accessToken;
+      if (refreshToken) existing.refreshToken = refreshToken;
+      existing.tokenExpiry = tokenExpiry;
+      existing.status = 'ACTIVE';
+      existing.active = true;
+      existing.coolingUntil = 0;
+      existing.lastError = null;
+      this.saveKeys();
+      this.logEvent('INFO', `Akun Google OAuth diperbarui: ${existing.name}`);
+      return existing;
+    }
+
+    const newKey = {
+      id: `oauth-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      authType: 'oauth',
+      name: name || email,
+      email: email,
+      picture: picture || null,
+      apiKey: '',
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      tokenExpiry: tokenExpiry,
+      active: true,
+      status: 'ACTIVE',
+      quotaLimit: 1000000,
+      tokensUsed: 0,
+      requestCount: 0,
+      successCount: 0,
+      failCount: 0,
+      coolingUntil: 0,
+      lastUsed: null,
+      lastError: null
+    };
+
+    this.keys.push(newKey);
+    this.saveKeys();
+    this.logEvent('INFO', `Akun Google OAuth baru terhubung: ${newKey.name}`);
+    return newKey;
+  }
+
+  /**
    * CRUD Operations
    */
   getAllKeys() {
     this.refreshCooldowns();
-    return this.keys.map(k => ({
-      ...k,
-      // Mask key for safety in frontend: AIzaSy...xxxx
-      maskedKey: k.apiKey ? `${k.apiKey.substring(0, 8)}...${k.apiKey.substring(k.apiKey.length - 4)}` : 'Belum diisi',
-      hasKey: !!k.apiKey && k.apiKey.trim().length > 10
-    }));
+    return this.keys.map(k => {
+      const isOAuth = k.authType === 'oauth';
+      let masked = 'Belum diisi';
+      if (isOAuth) {
+        masked = `Google OAuth (${k.email || k.name})`;
+      } else if (k.apiKey) {
+        masked = `${k.apiKey.substring(0, 8)}...${k.apiKey.substring(k.apiKey.length - 4)}`;
+      }
+
+      return {
+        ...k,
+        maskedKey: masked,
+        hasKey: isOAuth ? (!!k.accessToken || !!k.refreshToken) : (!!k.apiKey && k.apiKey.trim().length > 10)
+      };
+    });
   }
 
   addKey(data) {
     const newKey = {
       id: `key-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      authType: 'apiKey',
       name: data.name || `Akun ${this.keys.length + 1}`,
       apiKey: (data.apiKey || '').trim(),
       active: data.active !== false,
