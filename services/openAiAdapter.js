@@ -138,11 +138,10 @@ class OpenAiAdapter {
    */
   getModelsList() {
     const models = [
-      { id: 'gemini-3.8-flash', object: 'model', created: 1720000000, owned_by: 'google-hermes-pool' },
-      { id: 'gemini-2.5-flash', object: 'model', created: 1715000000, owned_by: 'google' },
-      { id: 'gemini-2.0-flash', object: 'model', created: 1710000000, owned_by: 'google' },
-      { id: 'gemini-1.5-pro', object: 'model', created: 1708000000, owned_by: 'google' },
-      { id: 'gemini-1.5-flash', object: 'model', created: 1708000000, owned_by: 'google' }
+      { id: 'gemini-3.8-flash', object: 'model', created: 1730000000, owned_by: 'google-hermes-pool' },
+      { id: 'gemini-3.8-pro', object: 'model', created: 1730000000, owned_by: 'google' },
+      { id: 'gemini-2.0-flash', object: 'model', created: 1720000000, owned_by: 'google' },
+      { id: 'gemini-1.5-flash', object: 'model', created: 1710000000, owned_by: 'google' }
     ];
 
     return {

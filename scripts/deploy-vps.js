@@ -22,40 +22,53 @@ console.log('======================================================');
 
 const conn = new Client();
 
-conn.on('ready', () => {
-  console.log('✅ SSH Connection established successfully!');
+function executeCmd(command, stepName) {
+  return new Promise((resolve, reject) => {
+    console.log(`\n▶ [${stepName}] Menjalankan: ${command}`);
+    conn.exec(command, (err, stream) => {
+      if (err) return reject(err);
 
-  const setupCommands = [
-    'mkdir -p /home/ubuntu/GeminiMultiRouter/data /home/ubuntu/GeminiMultiRouter/services /home/ubuntu/GeminiMultiRouter/public'
-  ].join(' && ');
-
-  conn.exec(setupCommands, (err, stream) => {
-    if (err) {
-      console.error('❌ Setup error:', err.message);
-      conn.end();
-      return;
-    }
-
-    stream.on('close', () => {
-      console.log('📁 Remote directories verified.');
-      uploadFiles();
+      stream.on('data', (data) => {
+        process.stdout.write(data);
+      });
+      stream.stderr.on('data', (data) => {
+        process.stderr.write(data);
+      });
+      stream.on('close', (code) => {
+        resolve(code);
+      });
     });
   });
-});
+}
 
-conn.on('error', (err) => {
-  console.error('❌ SSH Connection Error:', err.message);
-});
+function uploadFileList(sftp, files) {
+  return new Promise((resolve, reject) => {
+    let completed = 0;
+    files.forEach((f) => {
+      sftp.fastPut(f.local, f.remote, (err) => {
+        if (err) {
+          console.error(`❌ Gagal upload: ${f.local} -> ${f.remote}:`, err.message);
+          return reject(err);
+        }
+        console.log(`  ✔ Uploaded: ${path.basename(f.remote)}`);
+        completed++;
+        if (completed === files.length) {
+          resolve();
+        }
+      });
+    });
+  });
+}
 
-function uploadFiles() {
-  conn.sftp((err, sftp) => {
-    if (err) {
-      console.error('❌ SFTP Error:', err.message);
-      conn.end();
-      return;
-    }
+conn.on('ready', async () => {
+  console.log('✅ SSH Connection established successfully!');
 
-    console.log('📦 Mengunggah file project ke VPS...');
+  try {
+    await executeCmd(
+      'mkdir -p /home/ubuntu/GeminiMultiRouter/data /home/ubuntu/GeminiMultiRouter/services /home/ubuntu/GeminiMultiRouter/public',
+      'Membuat direktori remote'
+    );
+
     const localBase = path.join(__dirname, '..');
     const remoteBase = '/home/ubuntu/GeminiMultiRouter';
 
@@ -63,7 +76,6 @@ function uploadFiles() {
       { local: path.join(localBase, 'package.json'), remote: `${remoteBase}/package.json` },
       { local: path.join(localBase, 'server.js'), remote: `${remoteBase}/server.js` },
       { local: path.join(localBase, 'data', 'config.json'), remote: `${remoteBase}/data/config.json` },
-      { local: path.join(localBase, 'data', 'keys.json'), remote: `${remoteBase}/data/keys.json` },
       { local: path.join(localBase, 'services', 'geminiClient.js'), remote: `${remoteBase}/services/geminiClient.js` },
       { local: path.join(localBase, 'services', 'keyPoolManager.js'), remote: `${remoteBase}/services/keyPoolManager.js` },
       { local: path.join(localBase, 'services', 'openAiAdapter.js'), remote: `${remoteBase}/services/openAiAdapter.js` },
@@ -72,53 +84,43 @@ function uploadFiles() {
       { local: path.join(localBase, 'public', 'app.js'), remote: `${remoteBase}/public/app.js` }
     ];
 
-    let count = 0;
-    filesToUpload.forEach(f => {
-      sftp.fastPut(f.local, f.remote, (pErr) => {
-        if (pErr) {
-          console.warn(`⚠️ Gagal upload ${f.remote}:`, pErr.message);
-        } else {
-          console.log(`  Uploaded: ${path.basename(f.remote)}`);
-        }
-        count++;
-        if (count === filesToUpload.length) {
-          console.log('✅ Semua file berhasil diunggah ke VPS!');
-          startRemoteProcess();
+    console.log('\n📦 Mengunggah file project ke VPS...');
+    await new Promise((resolve, reject) => {
+      conn.sftp(async (err, sftp) => {
+        if (err) return reject(err);
+        try {
+          await uploadFileList(sftp, filesToUpload);
+          resolve();
+        } catch (uErr) {
+          reject(uErr);
         }
       });
     });
-  });
-}
 
-function startRemoteProcess() {
-  const remoteBase = '/home/ubuntu/GeminiMultiRouter';
-  const startCmd = [
-    `cd ${remoteBase}`,
-    'npm install --production',
-    'pm2 delete gemini-multi-router || true',
-    'pm2 start server.js --name "gemini-multi-router"',
-    'pm2 save',
-    'pm2 status'
-  ].join(' && ');
+    console.log('✅ File upload selesai!');
 
-  console.log('🚀 Memasang dependensi & menjalankan daemon PM2 di VPS...');
-  conn.exec(startCmd, (err, stream) => {
-    if (err) {
-      console.error('❌ Gagal menjalankan service:', err.message);
-      conn.end();
-      return;
-    }
+    await executeCmd(
+      `cd ${remoteBase} && pm2 restart gemini-multi-router || (pm2 start server.js --name "gemini-multi-router" && pm2 save)`,
+      'Restarting PM2 Service'
+    );
 
-    stream.on('close', () => {
-      console.log('======================================================');
-      console.log('  🎉 DEPLOYMENT BERHASIL! GEMINI MULTI-ROUTER LIVE!   ');
-      console.log('  🌐 Web UI Dashboard : http://43.156.17.135:3003     ');
-      console.log('  🔌 OpenAI Upstream API : http://localhost:3003/v1  ');
-      console.log('======================================================');
-      conn.end();
-    }).on('data', d => process.stdout.write(d.toString()))
-      .stderr.on('data', d => process.stderr.write(d.toString()));
-  });
-}
+    await executeCmd('pm2 status', 'Status PM2');
+
+    console.log('\n======================================================');
+    console.log('  🎉 DEPLOYMENT BERHASIL! GEMINI MULTI-ROUTER LIVE!   ');
+    console.log('  🌐 Domain URL   : https://tonhermes.web.id/9routerui/');
+    console.log('  🔌 OpenAI Upstream API : http://localhost:3003/v1  ');
+    console.log('======================================================');
+
+    conn.end();
+  } catch (err) {
+    console.error('❌ Error during deployment:', err.message);
+    conn.end();
+  }
+});
+
+conn.on('error', (err) => {
+  console.error('❌ SSH Connection Error:', err.message);
+});
 
 conn.connect(config);

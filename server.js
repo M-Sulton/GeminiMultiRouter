@@ -77,7 +77,7 @@ router.post('/api/keys/:id/toggle', (req, res) => {
 
 // Test a key directly
 router.post('/api/keys/test', async (req, res) => {
-  const { apiKey, id } = req.body;
+  const { apiKey, id, model } = req.body;
   let targetKey = apiKey;
 
   if (!targetKey && id) {
@@ -90,7 +90,7 @@ router.post('/api/keys/test', async (req, res) => {
   }
 
   try {
-    const testResult = await geminiClient.testKey(targetKey);
+    const testResult = await geminiClient.testKey(targetKey, model || 'gemini-3.8-flash');
     res.json(testResult);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -5,18 +5,21 @@
 
 class GeminiClient {
   normalizeModelName(model) {
-    if (!model) return 'gemini-2.5-flash';
+    if (!model) return 'gemini-3.8-flash';
     const lower = model.toLowerCase().trim();
     
-    // Map custom/preview aliases to the most advanced available Google Gemini model
-    if (lower.includes('3.8') || lower.includes('3-flash')) {
-      return 'gemini-2.5-flash'; // Google's fastest flash tier
+    // Map custom/preview aliases or deprecated model versions to gemini-3.8-flash
+    if (lower.includes('3.8') || lower.includes('3-flash') || lower.includes('2.5') || lower === 'gemini-flash') {
+      return 'gemini-3.8-flash'; // Google's primary latest flash tier
     }
     if (lower.includes('pro')) {
-      return 'gemini-2.5-pro';
+      return 'gemini-3.8-pro';
     }
     if (lower.includes('2.0') || lower.includes('2-flash')) {
       return 'gemini-2.0-flash';
+    }
+    if (lower.includes('1.5')) {
+      return 'gemini-1.5-flash';
     }
     return model;
   }
@@ -118,10 +121,28 @@ class GeminiClient {
   }
 
   /**
-   * Quick key validation test
+   * Quick key validation test with auto-fallback
    */
-  async testKey(apiKey, model = 'gemini-2.5-flash') {
-    const targetModel = this.normalizeModelName(model);
+  async testKey(apiKey, model = 'gemini-3.8-flash') {
+    let targetModel = this.normalizeModelName(model);
+    let result = await this._ping(apiKey, targetModel);
+
+    // If targetModel failed because of model availability (404 / deprecated), try gemini-3.8-flash or gemini-2.0-flash
+    if (!result.success && (result.status === 404 || (result.error && (result.error.includes('not found') || result.error.includes('no longer available'))))) {
+      if (targetModel !== 'gemini-3.8-flash') {
+        const retryFlash = await this._ping(apiKey, 'gemini-3.8-flash');
+        if (retryFlash.success) return retryFlash;
+      }
+      if (targetModel !== 'gemini-2.0-flash') {
+        const retry2 = await this._ping(apiKey, 'gemini-2.0-flash');
+        if (retry2.success) return retry2;
+      }
+    }
+
+    return result;
+  }
+
+  async _ping(apiKey, targetModel) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
     const payload = {
@@ -130,30 +151,40 @@ class GeminiClient {
     };
 
     const startTime = Date.now();
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    const data = await response.json();
-    const latency = Date.now() - startTime;
+      const data = await response.json();
+      const latency = Date.now() - startTime;
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return {
+          success: false,
+          status: response.status,
+          error: data?.error?.message || `HTTP ${response.status}`,
+          latency
+        };
+      }
+
       return {
-        success: false,
-        status: response.status,
-        error: data?.error?.message || `HTTP ${response.status}`,
+        success: true,
+        status: 200,
+        reply: data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'PONG',
+        model: targetModel,
         latency
       };
+    } catch (e) {
+      return {
+        success: false,
+        status: 500,
+        error: e.message,
+        latency: Date.now() - startTime
+      };
     }
-
-    return {
-      success: true,
-      status: 200,
-      reply: data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'OK',
-      latency
-    };
   }
 }
 
