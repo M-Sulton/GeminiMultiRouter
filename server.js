@@ -10,33 +10,36 @@ const PORT = process.env.PORT || keyPool.config.port || 3003;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Router that works seamlessly on both '/' and '/9routerui'
+const router = express.Router();
+
+router.use(express.static(path.join(__dirname, 'public')));
 
 // ----------------- OPENAI-COMPATIBLE PROXY ROUTES (FOR 9ROUTER, CLAUDE CODE, CURSOR) ----------------- //
 
-app.post('/v1/chat/completions', (req, res) => {
+router.post('/v1/chat/completions', (req, res) => {
   openAiAdapter.handleChatCompletion(req, res);
 });
 
-app.get('/v1/models', (req, res) => {
+router.get('/v1/models', (req, res) => {
   res.json(openAiAdapter.getModelsList());
 });
 
-// Also support root /chat/completions for various clients
-app.post('/chat/completions', (req, res) => {
+router.post('/chat/completions', (req, res) => {
   openAiAdapter.handleChatCompletion(req, res);
 });
 
 // ----------------- KEY POOL & MANAGEMENT API ROUTES ----------------- //
 
-app.get('/api/keys', (req, res) => {
+router.get('/api/keys', (req, res) => {
   res.json({
     success: true,
     keys: keyPool.getAllKeys()
   });
 });
 
-app.post('/api/keys', (req, res) => {
+router.post('/api/keys', (req, res) => {
   const { name, apiKey, quotaLimit } = req.body;
   if (!apiKey || apiKey.trim().length < 5) {
     return res.status(400).json({ success: false, message: 'Google Gemini API Key wajib diisi!' });
@@ -51,7 +54,7 @@ app.post('/api/keys', (req, res) => {
   res.json({ success: true, key: newKey });
 });
 
-app.put('/api/keys/:id', (req, res) => {
+router.put('/api/keys/:id', (req, res) => {
   const updated = keyPool.updateKey(req.params.id, req.body);
   if (!updated) {
     return res.status(404).json({ success: false, message: 'Key tidak ditemukan.' });
@@ -59,12 +62,12 @@ app.put('/api/keys/:id', (req, res) => {
   res.json({ success: true, key: updated });
 });
 
-app.delete('/api/keys/:id', (req, res) => {
+router.delete('/api/keys/:id', (req, res) => {
   const deleted = keyPool.deleteKey(req.params.id);
   res.json({ success: deleted });
 });
 
-app.post('/api/keys/:id/toggle', (req, res) => {
+router.post('/api/keys/:id/toggle', (req, res) => {
   const toggled = keyPool.toggleKey(req.params.id);
   if (!toggled) {
     return res.status(404).json({ success: false, message: 'Key tidak ditemukan.' });
@@ -73,7 +76,7 @@ app.post('/api/keys/:id/toggle', (req, res) => {
 });
 
 // Test a key directly
-app.post('/api/keys/test', async (req, res) => {
+router.post('/api/keys/test', async (req, res) => {
   const { apiKey, id } = req.body;
   let targetKey = apiKey;
 
@@ -96,21 +99,21 @@ app.post('/api/keys/test', async (req, res) => {
 
 // ----------------- STATS & CONFIG API ROUTES ----------------- //
 
-app.get('/api/stats', (req, res) => {
+router.get('/api/stats', (req, res) => {
   res.json({
     success: true,
     stats: keyPool.getStats()
   });
 });
 
-app.get('/api/config', (req, res) => {
+router.get('/api/config', (req, res) => {
   res.json({
     success: true,
     config: keyPool.config
   });
 });
 
-app.post('/api/config', (req, res) => {
+router.post('/api/config', (req, res) => {
   const { rotationStrategy, cooldownSeconds, defaultModel } = req.body;
   if (rotationStrategy) keyPool.config.rotationStrategy = rotationStrategy;
   if (cooldownSeconds) keyPool.config.cooldownSeconds = parseInt(cooldownSeconds, 10);
@@ -121,12 +124,21 @@ app.post('/api/config', (req, res) => {
   res.json({ success: true, config: keyPool.config });
 });
 
+router.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Mount on /9routerui AND root / so both URLs work identically!
+app.use('/9routerui', router);
+app.use('/', router);
+
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log('======================================================');
   console.log('  🚀 GEMINI MULTI-ACCOUNT POOL & ROUTER ONLINE        ');
-  console.log(`  🌐 Web UI Dashboard: http://localhost:${PORT}        `);
-  console.log(`  🔌 OpenAI Endpoint : http://localhost:${PORT}/v1     `);
-  console.log(`  ✨ Default Model   : ${keyPool.config.defaultModel}   `);
+  console.log(`  🌐 Root UI Dashboard : http://localhost:${PORT}/     `);
+  console.log(`  🌐 Subpath UI Route  : http://localhost:${PORT}/9routerui`);
+  console.log(`  🔌 OpenAI Endpoint   : http://localhost:${PORT}/v1   `);
+  console.log(`  ✨ Default Model     : ${keyPool.config.defaultModel} `);
   console.log('======================================================');
 });

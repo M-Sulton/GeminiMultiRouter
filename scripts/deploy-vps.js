@@ -1,4 +1,9 @@
-const { Client } = require('ssh2');
+let Client;
+try {
+  Client = require('ssh2').Client;
+} catch (e) {
+  Client = require('d:/Hermes/BotScrapPubgStat/node_modules/ssh2').Client;
+}
 const fs = require('fs');
 const path = require('path');
 

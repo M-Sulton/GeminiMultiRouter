@@ -8,6 +8,9 @@ let statsData = {};
 let chatHistory = [];
 let isGenerating = false;
 
+// Base path detection (supports running at root or under /9routerui reverse proxy)
+const BASE_PATH = window.location.pathname.startsWith('/9routerui') ? '/9routerui' : '';
+
 // Snippets for 9router tab
 const curlSnippet = `curl -X POST http://localhost:3003/v1/chat/completions \\
   -H "Content-Type: application/json" \\
@@ -181,7 +184,7 @@ async function sendMessage() {
   const thinkingId = appendThinkingIndicator();
 
   try {
-    const res = await fetch('/v1/chat/completions', {
+    const res = await fetch(`${BASE_PATH}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -338,7 +341,7 @@ function updateActiveKeySnapshot(key, usage = {}, latency = 0) {
 /* ==================== 3. KEY POOL MANAGER ==================== */
 async function fetchKeys() {
   try {
-    const res = await fetch('/api/keys');
+    const res = await fetch(`${BASE_PATH}/api/keys`);
     const data = await res.json();
     if (data.success && Array.isArray(data.keys)) {
       keysList = data.keys;
@@ -497,7 +500,7 @@ function initKeyModal() {
       testArea.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghubungi Google Gemini API...';
 
       try {
-        const res = await fetch('/api/keys/test', {
+        const res = await fetch(`${BASE_PATH}/api/keys/test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiKey })
@@ -528,7 +531,7 @@ function initKeyModal() {
       const quotaLimit = parseInt(document.getElementById('key-input-quota').value, 10);
 
       try {
-        const res = await fetch('/api/keys', {
+        const res = await fetch(`${BASE_PATH}/api/keys`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, apiKey, quotaLimit })
@@ -553,7 +556,7 @@ function initKeyModal() {
 async function testKeyAction(id) {
   showToast('Mengetes akun...');
   try {
-    const res = await fetch('/api/keys/test', {
+    const res = await fetch(`${BASE_PATH}/api/keys/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
@@ -571,7 +574,7 @@ async function testKeyAction(id) {
 
 async function toggleKeyAction(id) {
   try {
-    const res = await fetch(`/api/keys/${id}/toggle`, { method: 'POST' });
+    const res = await fetch(`${BASE_PATH}/api/keys/${id}/toggle`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       showToast(`Status akun telah diubah.`);
@@ -587,7 +590,7 @@ async function deleteKeyAction(id, name) {
   if (!confirm(`Yakin ingin menghapus akun "${name}" dari pool?`)) return;
 
   try {
-    const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${BASE_PATH}/api/keys/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
       showToast(`Akun "${name}" telah dihapus.`);
@@ -606,7 +609,7 @@ function initStrategySettings() {
     saveBtn.addEventListener('click', async () => {
       const rotationStrategy = document.getElementById('select-rotation-strategy')?.value || 'failover';
       try {
-        const res = await fetch('/api/config', {
+        const res = await fetch(`${BASE_PATH}/api/config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rotationStrategy })
@@ -634,7 +637,7 @@ function initStrategySettings() {
 /* ==================== 7. STATS & ANALYTICS FETCH ==================== */
 async function fetchStats() {
   try {
-    const res = await fetch('/api/stats');
+    const res = await fetch(`${BASE_PATH}/api/stats`);
     const data = await res.json();
     if (data.success && data.stats) {
       statsData = data.stats;
