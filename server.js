@@ -158,7 +158,7 @@ router.get('/api/oauth/google/login', (req, res) => {
   const host = req.headers['x-forwarded-host'] || req.get('host') || 'tonhermes.web.id';
   const redirectUri = oauth.redirectUri || `${protocol}://${host}/9routerui/api/oauth/google/callback`;
 
-  const scope = encodeURIComponent('https://www.googleapis.com/auth/generative-language email profile');
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/generative-language.peruserquota https://www.googleapis.com/auth/generative-language.retriever email profile openid');
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${oauth.googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
 
   res.redirect(googleAuthUrl);
