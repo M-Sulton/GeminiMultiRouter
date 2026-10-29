@@ -1,5 +1,8 @@
-node_modules/
-*.log
+data/config.json
+data/keys.json
+-e 
 .env
+*.log
+node_modules/
 package-lock.json.bak
 scripts/
